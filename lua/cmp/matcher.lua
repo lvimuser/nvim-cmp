@@ -340,4 +340,5 @@ matcher.find_match_region = function(input, input_start_index, input_end_index, 
   return nil
 end
 
+matcher.match = require('cmp.fuzzy_matcher').match
 return matcher
