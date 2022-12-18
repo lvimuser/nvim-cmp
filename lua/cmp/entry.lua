@@ -60,7 +60,7 @@ entry.get_offset = function(self)
     if self:get_completion_item().textEdit then
       local range = self:get_insert_range()
       if range then
-        offset = self.context.cache:ensure('entry:' .. 'get_offset:'.. tostring(range.start.character), function()
+        offset = self.context.cache:ensure('entry:' .. 'get_offset:' .. tostring(range.start.character), function()
           for idx = range.start.character + 1, self.source_offset do
             if not char.is_white(string.byte(self.context.cursor_line, idx)) then
               return idx
@@ -358,34 +358,23 @@ end
 
 ---Match line.
 ---@param input string
----@param matching_config cmp.MatchingConfig
 ---@return { score: integer, matches: table[] }
-entry.match = function(self, input, matching_config)
-  return self.match_cache:ensure(
-    input .. ':' ..
-    (self.resolved_completion_item and '1' or '0' .. ':') ..
-    (matching_config.disallow_fuzzy_matching and '1' or '0') .. ':' ..
-    (matching_config.disallow_partial_fuzzy_matching and '1' or '0') .. ':' ..
-    (matching_config.disallow_partial_matching and '1' or '0') .. ':' ..
-    (matching_config.disallow_prefix_unmatching and '1' or '0')
-  , function()
-    local option = {
-      disallow_fuzzy_matching = matching_config.disallow_fuzzy_matching,
-      disallow_partial_fuzzy_matching = matching_config.disallow_partial_fuzzy_matching,
-      disallow_partial_matching = matching_config.disallow_partial_matching,
-      disallow_prefix_unmatching = matching_config.disallow_prefix_unmatching,
-      synonyms = {
-        self:get_word(),
-        self:get_completion_item().label,
-      },
-    }
+entry.match = function(self, input)
+  return self.match_cache:ensure(input .. ':' .. (self.resolved_completion_item and '1' or '0' .. ':'), function()
+    local filter_text = self:get_filter_text()
+    local vim_item = self:get_vim_item(self:get_offset())
 
-    local score, matches, filter_text, _
-    filter_text = self:get_filter_text()
-    score, matches = matcher.match(input, filter_text, option)
+    local w = vim_item.word
+    local score, matches = matcher.match(input, filter_text)
+    if filter_text ~= w and (filter_text:match('%W')) then
+      local new_score, new_matches = matcher.match(input, w)
+      if new_score > score then
+        return { score = new_score, matches = new_matches }
+      end
+    end
 
     -- Support the language server that doesn't respect VSCode's behaviors.
-    if score == 0 then
+    if score <= 0 then
       if self:get_completion_item().textEdit and not misc.empty(self:get_completion_item().textEdit.newText) then
         local diff = self.source_offset - self:get_offset()
         if diff > 0 then
@@ -395,16 +384,10 @@ entry.match = function(self, input, matching_config)
           accept = accept or string.find(self:get_completion_item().textEdit.newText, prefix, 1, true)
           if accept then
             filter_text = prefix .. self:get_filter_text()
-            score, matches = matcher.match(input, filter_text, option)
+            score, matches = matcher.match(input, filter_text)
           end
         end
       end
-    end
-
-    local vim_item = self:get_vim_item(self:get_offset())
-    if filter_text ~= vim_item.abbr then
-      filter_text = vim_item.abbr or vim_item.word
-      _, matches = matcher.match(input, filter_text, option)
     end
 
     return { score = score, matches = matches }

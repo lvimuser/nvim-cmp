@@ -143,7 +143,7 @@ source.get_default_insert_range = function(self)
     error('context is not initialized yet.')
   end
 
-  return self.cache:ensure({ 'get_default_insert_range', tostring(self.revision) }, function()
+  return self.cache:ensure('get_default_insert_range' .. tostring(self.revision), function()
     return {
       start = {
         line = self.context.cursor.row - 1,
@@ -164,7 +164,7 @@ source.get_default_replace_range = function(self)
     error('context is not initialized yet.')
   end
 
-  return self.cache:ensure({ 'get_default_replace_range', tostring(self.revision) }, function()
+  return self.cache:ensure('get_default_replace_range' .. tostring(self.revision), function()
     local _, e = pattern.offset('^' .. '\\%(' .. self:get_keyword_pattern() .. '\\)', string.sub(self.context.cursor_line, self.offset))
     return {
       start = {
