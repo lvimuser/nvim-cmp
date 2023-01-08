@@ -65,6 +65,31 @@ view.open = function(self, ctx, sources)
     return a ~= b and (a < b) or nil
   end)
 
+  local cache = {}
+  local fn = function(entries, e)
+    local c = e.completion_item
+    local w = c.label or c.word
+
+    if not w then
+      return true
+    end
+
+    if cache[c.label] then
+      return false
+    end
+
+    for _, v in pairs(entries) do
+      local c2 = v.completion_item
+      local w2 = c2.label or c2.word
+      if w == w2 then
+        cache[w] = true
+        return false
+      end
+    end
+
+    return true
+  end
+
   local entries = {}
   for _, group_index in ipairs(group_indexes) do
     local source_group = source_group_map[group_index] or {}
@@ -88,19 +113,29 @@ view.open = function(self, ctx, sources)
           -- source order priority bonus.
           local priority = s:get_source_config().priority or ((#source_group - (i - 1)) * config.get().sorting.priority_weight)
 
-          for _, e in ipairs(s:get_entries(ctx)) do
-            e.score = e.score + priority
-            table.insert(entries, e)
-            offset = math.min(offset, e:get_offset())
+          if s.name == 'rg' or s.name == 'buffer' then
+            for _, e in ipairs(s:get_entries(ctx)) do
+              if fn(entries, e) then
+                e.score = e.score + priority
+                table.insert(entries, e)
+                offset = math.min(offset, e:get_offset())
+              end
+            end
+          else
+            for _, e in ipairs(s:get_entries(ctx)) do
+              e.score = e.score + priority
+              table.insert(entries, e)
+              offset = math.min(offset, e:get_offset())
+            end
           end
         end
       end
     end
 
     -- sort.
-    local comparetors = config.get().sorting.comparators
+    local comparators = config.get().sorting.comparators
     table.sort(entries, function(e1, e2)
-      for _, fn in ipairs(comparetors) do
+      for _, fn in ipairs(comparators) do
         local diff = fn(e1, e2)
         if diff ~= nil then
           return diff
